@@ -13,7 +13,7 @@ build: build-contracts build-safe
 # ---- contracts: the hybrid account, its satellite, the factory
 build-contracts:
 	cd contracts && forge build --sizes
-test-contracts:
+test-contracts: build-contracts
 	cd contracts && forge test -j$(CORES) -vv
 test-contracts-fast:
 	cd contracts && forge test --match-contract MLDSA -vv
@@ -21,12 +21,12 @@ test-contracts-fast:
 # ---- safe: post-quantum owners of a Safe
 build-safe:
 	cd safe && forge build --sizes
-test-safe:
+test-safe: build-safe
 	cd safe && forge test -j$(CORES) -vv --no-match-contract SafePQFrontFixtureTest
-test-safe-gas:
+test-safe-gas: build-safe
 	cd safe && forge test --match-test "test_nested_exec_2ecdsa_2pq|test_nested_approveHash_path" -vv
 # the vector app/packages/safe is checked against: regenerate it whenever a digest changes
-safe-front-fixture:
+safe-front-fixture: build-safe
 	cd safe && forge test --match-contract SafePQFrontFixtureTest -vv
 
 # ---- app: the wallet core, its UI, the demo, the Safe signer
