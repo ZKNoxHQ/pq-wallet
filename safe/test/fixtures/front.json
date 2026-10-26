@@ -1,0 +1,55 @@
+{
+  "approveHashDigests": [
+    "0x2bc0ede519b12a6932c760f7cbd07342b4354f85e143eb9a912ad0755c21fbf5",
+    "0x05adda8d7bcc090c23540ebca47495c6dcb1ddb08e6757bdde8f64a381d11b1b",
+    "0x3d8857eb460ba9090679e1f931675cd4d7daac8ccd92792a47c584f6233db68f"
+  ],
+  "chainId": 31337,
+  "k": 2,
+  "k1PrivateKeys": [
+    45233,
+    45234,
+    45235
+  ],
+  "lens": "0x3D7Ebc40AF7092E3F1C81F2e996cbA5Cae2090d7",
+  "nestedOwnerDigests": [
+    "0xf6d5e6a3087ac6e56e6c258ff30137b59a318c16df71bfd5400d64ed9409bff4",
+    "0x72a29cea90fc91e1285096599a0d13f60ad94b0c6528408f3a8ef330e922e7c2",
+    "0xd761849b99f991d8aa75d63a72fea57a5132b601b43259cb31359183a80840f8"
+  ],
+  "pqChildSignatureBytes": 83842,
+  "pqChildSignatureHash": "0x0f1d986a2435fc64de877ff0c8750ce7ee3a7adca2d7db43e455fabfe67cc1a6",
+  "pqExecCalldataBytes": 84324,
+  "pqExecCalldataZeros": 22268,
+  "pqExecFloor": 2725920,
+  "pqExecIntrinsic": 1102968,
+  "pqImplementation": "0xa38D17ef017A314cCD72b8F199C0e108EF7Ca04c",
+  "pqOwners": [
+    "0xBb5414c5C2000501e9020A1Eb45B4604F1419e57",
+    "0x6084156F997FEaE4B76e065633ea9a436E68f2BB",
+    "0x8bfD16c8996aC0A8FCF32C814eb4266B4c630412"
+  ],
+  "pqSafeTxHash": "0x4820570ae059619b56e3828abf9de0a07b7f1baf8d0efa741882afb446a5a348",
+  "pqTxData": "0xd4d9bdcd60c9f38cd358c9c93d35659147b8f5741398f109a0bcd48838fb1a28fdc90a84",
+  "pqTxNonce": 0,
+  "root": "0x4C9F4B6fdBE48cab21C3c87c90832899fa6FD24a",
+  "rootApprovedSignature": "0x000000000000000000000000c24795682f3f0ee02f93786475dc6283ef8c5924000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000cd102e9c47efd4a525774a3a2d27e6d4cadeb98f000000000000000000000000000000000000000000000000000000000000000001",
+  "rootDomainSeparator": "0x2ba5b386ada0e6aec6efa112f9a5d83ee863c1f42c973aeed6f0a9c7d19677e5",
+  "rootSafeTxHash": "0x60c9f38cd358c9c93d35659147b8f5741398f109a0bcd48838fb1a28fdc90a84",
+  "sEcdsa": "0xC24795682F3f0ee02f93786475dc6283eF8c5924",
+  "sPq": "0xcD102E9C47EFd4A525774A3A2d27E6d4cadEB98f",
+  "sPqDomainSeparator": "0x70a53b1ead460bd425007d3ea7d1babc3cf0584df8624660d32e713a1b37b922",
+  "sPqSafeMessageHash": "0x43d980b38118254f5c80e4daa8754040b8b336fdeb55297b53937381c05ce357",
+  "seeds": [
+    "18f6d4b2907e5c3a18f6d4b2907e5c3a18f6d4b2907e5c3a18f6d4b2907e5c3a",
+    "2907e5c3a18f6d4b2907e5c3a18f6d4b2907e5c3a18f6d4b2907e5c3a18f6d4b",
+    "3a18f6d4b2907e5c3a18f6d4b2907e5c3a18f6d4b2907e5c3a18f6d4b2907e5c"
+  ],
+  "signerOneHybridPayloadBytes": 41824,
+  "signerOneHybridPayloadHash": "0xaab0bbc861e8a94e12fe141db9a413d6cffebb6db413ce133d80b78a6aa6ca75",
+  "txData": "0x",
+  "txNonce": 0,
+  "txOperation": 0,
+  "txTo": "0x5c4d2bd3510C8B51eDB17766d3c96EC637326999",
+  "txValue": 2000000000000000000
+}

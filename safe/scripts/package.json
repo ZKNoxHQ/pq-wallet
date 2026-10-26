@@ -1,0 +1,10 @@
+{
+  "name": "@zknox/safe-pq-scripts",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Host side of the Forge scripts: the ML-DSA-65 software signer the tests drive through vm.ffi, and the ECML-Signer Ledger client.",
+  "dependencies": {
+    "@ledgerhq/hw-transport-node-hid": "^6.29.0"
+  }
+}

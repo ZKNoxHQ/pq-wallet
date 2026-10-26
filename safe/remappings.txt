@@ -1,0 +1,11 @@
+forge-std/=../lib/forge-std/src/
+account-abstraction/=../lib/account-abstraction/
+@openzeppelin/contracts/=../lib/openzeppelin-contracts/contracts/
+openzeppelin-contracts/=../lib/openzeppelin-contracts/
+InterfaceVerifier/=../lib/InterfaceVerifier/src/
+ETHDILITHIUM/=../lib/ETHDILITHIUM/
+ETHFALCON/=../lib/ETHFALCON/
+sstore2/=../lib/sstore2/contracts/
+pq-account/=../contracts/src/
+safe/=../lib/safe-smart-account/contracts/
+safe141/=../lib/safe-smart-account-1.4.1/contracts/

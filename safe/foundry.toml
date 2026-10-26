@@ -1,0 +1,37 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["../lib"]
+test = "test"
+script = "script"
+# same compiler settings as ../contracts (the packed ML-DSA kernels need via-IR, solc 0.8.30, runs 1e6,
+# see ETHDILITHIUM ADR-004). Safe 1.4.1 / 1.5.0 sources accept 0.8.x and are compiled with them in the
+# tests only; on-chain, the canonical Safe deployments are used (ADR-003).
+solc_version = "0.8.30"
+via_ir = true
+optimizer = true
+optimizer_runs = 1000000
+evm_version = "cancun"
+ffi = true
+allow_paths = ["../lib", "../contracts"]
+fs_permissions = [
+  { access = "read", path = "./" },
+  { access = "read", path = "../lib" },
+  { access = "read", path = "../contracts" },
+  { access = "read-write", path = "./plans" },
+  # the vector the TypeScript front is checked against (test/SafePQFrontFixture.t.sol)
+  { access = "read-write", path = "./test/fixtures" },
+  { access = "read-write", path = "./deployments" },
+]
+gas_limit = 72057594037927935
+# Safe sources hit "stack too deep" under via-IR: compiled apart with the Safe release settings (legacy
+# pipeline, 200 runs), reached from the tests through artifacts only (deployCode), ADR-003
+additional_compiler_profiles = [{ name = "safe", via_ir = false, optimizer_runs = 200 }]
+compilation_restrictions = [
+  { paths = "../lib/safe-smart-account/**", via_ir = false },
+  { paths = "../lib/safe-smart-account-1.4.1/**", via_ir = false },
+  { paths = "test/safe/**", via_ir = false },
+]
+
+[lint]
+lint_on_build = false

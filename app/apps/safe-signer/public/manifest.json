@@ -1,0 +1,7 @@
+{
+  "name": "ZKNOX post-quantum signer",
+  "short_name": "PQ signer",
+  "description": "Collects ML-DSA-65 owner signatures for a Safe and turns them into the child Safe's approval of the root transaction.",
+  "iconPath": "icon.svg",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

@@ -1,0 +1,26 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["../lib"]
+optimizer = true
+# aligned with ETHFALCON exp/pq-verifier-gas and ETHDILITHIUM exp/packed-verifier:
+# the packed kernels need via-IR (solc >= 0.8.30) and runs high enough to keep
+# the 32-byte lane constants as PUSH32 (ETHDILITHIUM ADR-004)
+optimizer_runs = 1000000
+via_ir = true
+solc_version = "0.8.30"
+evm_version = "cancun"
+ffi = true
+allow_paths = ["../lib"]
+fs_permissions = [
+  { access = "read", path = "./" },
+  { access = "read", path = "../lib" },
+  { access = "read-write", path = "./deployments" },
+]
+gas_limit = 72057594037927935
+
+[profile.lite]
+optimizer = false
+via_ir = true
+solc_version = "0.8.30"
+evm_version = "cancun"

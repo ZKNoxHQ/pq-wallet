@@ -1,0 +1,6 @@
+packages:
+  - packages/*
+  - apps/*
+# esbuild ships a platform binary; vite and vitest both need its install script to run
+allowBuilds:
+  esbuild: true

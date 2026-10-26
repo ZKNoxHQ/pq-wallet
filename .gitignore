@@ -1,0 +1,20 @@
+out/
+cache/
+broadcast/
+node_modules/
+dist/
+.env
+
+# reference signers, built by scripts/bootstrap.sh
+lib/*/pythonref/myenv/
+lib/*/js/node_modules/
+
+# plans carry a Safe's live addresses and nonces
+safe/plans/*.json
+
+# local-chain deployments only: a public-network one is the record of what is live, and is committed
+safe/deployments/31337-*.json
+
+# ce qu'un appareil reporte : clés publiques etendues (38 ko) et reponses de signature
+safe/keys/*.hex
+safe/answers/*.json

@@ -1,0 +1,57 @@
+# Publishes app/apps/safe-signer to GitHub Pages, which is what Safe{Wallet} needs: a plain https URL
+# serving manifest.json. Enable it once in Settings → Pages → Source: GitHub Actions.
+#
+# The app is served under /<repo>/, so the build is given BASE accordingly; without it every asset
+# resolves against the domain root and the page loads blank inside the frame.
+#
+# No submodules are fetched: the front builds from the workspace alone. The Forge side needs lib/, this
+# does not.
+name: safe-signer → Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/safe-signer-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - name: install
+        working-directory: app
+        run: pnpm install --frozen-lockfile
+      - name: build
+        working-directory: app/apps/safe-signer
+        env:
+          BASE: /${{ github.event.repository.name }}/
+        run: pnpm exec vite build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/apps/safe-signer/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

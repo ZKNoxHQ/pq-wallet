@@ -1,0 +1,27 @@
+[submodule "forge-std"]
+	path = lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "account-abstraction"]
+	path = lib/account-abstraction
+	url = https://github.com/eth-infinitism/account-abstraction
+[submodule "openzeppelin-contracts"]
+	path = lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "sstore2"]
+	path = lib/sstore2
+	url = https://github.com/0xsequence/sstore2
+[submodule "InterfaceVerifier"]
+	path = lib/InterfaceVerifier
+	url = https://github.com/ZKNoxHQ/InterfaceVerifier
+[submodule "ETHFALCON"]
+	path = lib/ETHFALCON
+	url = https://github.com/ZKNoxHQ/ETHFALCON
+[submodule "ETHDILITHIUM"]
+	path = lib/ETHDILITHIUM
+	url = https://github.com/ZKNoxHQ/ETHDILITHIUM
+[submodule "safe-smart-account"]
+	path = lib/safe-smart-account
+	url = https://github.com/safe-global/safe-smart-account
+[submodule "safe-smart-account-1.4.1"]
+	path = lib/safe-smart-account-1.4.1
+	url = https://github.com/safe-global/safe-smart-account
