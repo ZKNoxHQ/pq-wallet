@@ -11,7 +11,7 @@
 //      and flipping s without flipping v would recover a different address;
 //   3. the app only knows the packed 1,952-byte ML-DSA-65 public key. The expanded 38,112-byte form the
 //      verifier reads is computed here, with ETHDILITHIUM's own encoder.
-import { keccak_256 } from "../../lib/ETHDILITHIUM/js/node_modules/@noble/hashes/sha3.js";
+import { keccak_256 } from "@noble/hashes/sha3.js";
 import { expandPublicKey65, encodePublicKey65 } from "../../lib/ETHDILITHIUM/js/mldsa65.js";
 
 export const MLDSA65_PK_BYTES = 1952;

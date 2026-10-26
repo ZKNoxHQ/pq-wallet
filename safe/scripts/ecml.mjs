@@ -102,7 +102,7 @@ async function cmdKey() {
   try {
     const address = await k1Address(dev, path);
     // KEYGEN_DILITHIUM loads the key into the context without asking the user; the chunks then read it.
-    await dev.send(INS.KEYGEN_DILITHIUM, 0x00, P2_MLDSA_65);
+    await dev.send(INS.KEYGEN_DILITHIUM, 0x00, P2_MLDSA_65, packDerivationPath(path));
     const rawPk = await fetchChunks(dev, INS.GET_PK_CHUNK, MLDSA65_PK_BYTES);
     const key = expandedKey(rawPk);
     console.log(`path            ${path}`);
