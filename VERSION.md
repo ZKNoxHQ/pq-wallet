@@ -3,6 +3,21 @@
 Ce fichier suit la disposition du dépôt et les pins. Le détail par périmètre reste dans
 `contracts/VERSION.md` et `safe/VERSION.md`, et les décisions dans les `DECISIONS.md` correspondants.
 
+## [0.8.1] 2026-10-26 : les cibles de test construisent dabord
+
+### Fixed
+- `make test-safe` echouait sur `artifact not found` dans un clone neuf. Les sources Safe sont compilees
+  sous leur propre profil et atteintes uniquement par `deployCode` : rien ne les importe, donc `forge test`
+  ne les produit pas. `test-safe`, `test-safe-gas`, `safe-front-fixture` et `test-contracts` dependent
+  desormais de leur cible de construction. Releve sur un clone depuis zero, le seul vrai test du depot.
+
+   
+   ## [0.8.1] 2026-10-26 : les cibles de test construisent dabord
+   
+   ### Fixed
+   - `make test-safe` echouait sur `artifact not found` dans un clone neuf. Les sources Safe sont compilees
+     sous leur propre profil et atteintes uniquement par `deployCode`. Les cibles de test dependent
+     desormais de leur cible de construction.
 ## [0.8.0] 2026-10-23 : de quoi faire la démonstration sur Sepolia
 
 ### Added
