@@ -1,6 +1,6 @@
 CORES := $(shell nproc)
 ANVIL_KEY := 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-RPC := http://127.0.0.1:8545
+RPC ?= http://127.0.0.1:8545
 
 # One-time setup: submodules at their pinned commits, reference signers, app workspace.
 install:
@@ -59,7 +59,7 @@ e2e: deploy-local
 # it: the script hangs on a receipt that will not come.
 safe-deploy-local:
 	cd safe && forge script script/DeployLocalNested.s.sol --rpc-url $(RPC) --broadcast --slow \
-	  --gas-estimate-multiplier 300
+	  --gas-estimate-multiplier 800
 
 # ---- public networks (SEPOLIA_RPC and DEPLOYER_KEY from the environment)
 deploy-sepolia:
@@ -77,16 +77,16 @@ safe-deploy-lens:
 	cd safe && forge script script/DeployLens.s.sol --rpc-url $(RPC) --ledger --sender $(SENDER) --broadcast
 # the ML-DSA-65 account stack on a chain that already has Safe 1.5.0 (Sepolia, mainnet)
 safe-deploy-pq65:
-	cd safe && forge script script/DeployPqStack65.s.sol --rpc-url $(RPC) --ledger --sender $(SENDER) --broadcast
+	cd safe && forge script script/DeployPqStack65.s.sol --rpc-url $(RPC) --ledger --sender $(SENDER) --broadcast --slow --gas-estimate-multiplier 800
 # one post-quantum owner, from the keys a device reported (FACTORY, K1_ADDRESS, KEY_FILE)
 safe-create-owner:
 	cd safe && forge script script/CreatePqOwner.s.sol --rpc-url $(RPC) --ledger --sender $(SENDER) --broadcast \
-	  --gas-estimate-multiplier 300
+	  --gas-estimate-multiplier 800
 # the 2-of-2 root owning the two children (S_ECDSA, S_PQ, K)
 safe-create-root:
-	cd safe && forge script script/CreateRootSafe.s.sol --rpc-url $(RPC) --ledger --sender $(SENDER) --broadcast
+	cd safe && forge script script/CreateRootSafe.s.sol --rpc-url $(RPC) --ledger --sender $(SENDER) --broadcast --slow --gas-estimate-multiplier 800
 safe-deploy-children:
-	cd safe && forge script script/DeployNestedSafes.s.sol --rpc-url $(RPC) --ledger --sender $(SENDER) --broadcast
+	cd safe && forge script script/DeployNestedSafes.s.sol --rpc-url $(RPC) --ledger --sender $(SENDER) --broadcast --slow --gas-estimate-multiplier 800
 safe-exec-planned:
 	cd safe && forge script script/ExecPlannedTx.s.sol --rpc-url $(RPC) --ledger --sender $(SENDER) --broadcast
 safe-exec-nested:
