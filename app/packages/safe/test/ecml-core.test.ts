@@ -16,8 +16,9 @@ type Core = {
   addressFromPubkey: (p: Uint8Array | string) => string;
   derToRsv: (der: Uint8Array | string, parity: number) => Hex;
   parseDer: (der: Uint8Array | string) => { r: Buffer; s: Buffer };
+  parseEthAppAddress: (res: Uint8Array | string) => string;
   expandedKey: (pk: Uint8Array | string) => Hex;
-  packDerivationPath: (p: string) => Buffer;
+  packDerivationPath: (p: string, requireHardened?: boolean) => Buffer;
   chunkPlan: (total: number, stride?: number) => [number, number][];
   MLDSA65_KEY_BYTES: number;
   MLDSA65_PK_BYTES: number;
@@ -108,6 +109,31 @@ describe.skipIf(!ready)("ECML-Signer host conversions", () => {
     expect(p[0]).toBe(5);
     expect(p.length).toBe(21);
     expect(p.readUInt32BE(1)).toBe(0x8000002c); // 44'
+  });
+
+  it("reads the deploying address out of the stock Ethereum app's answer", async () => {
+    const { parseEthAppAddress } = await core();
+    const pub = hexToBytes(account.publicKey); // 65 bytes, 0x04-tagged
+    const ascii = Buffer.from(account.address.slice(2).toLowerCase(), "ascii");
+    const frame = Uint8Array.from([65, ...pub, 40, ...ascii]);
+    expect(parseEthAppAddress(frame).toLowerCase()).toBe(account.address.toLowerCase());
+  });
+
+  it("refuses an Ethereum-app answer whose address and public key disagree", async () => {
+    const { parseEthAppAddress } = await core();
+    const pub = hexToBytes(account.publicKey);
+    const wrong = Buffer.from("00".repeat(20), "ascii"); // 40 ASCII characters, wrong address
+    expect(() => parseEthAppAddress(Uint8Array.from([65, ...pub, 40, ...wrong]))).toThrow(/does not match/);
+    expect(() => parseEthAppAddress(Uint8Array.from([64, ...pub.slice(0, 64)]))).toThrow(/65-byte/);
+  });
+
+  it("packs a non-hardened path only when asked, as the Ethereum app needs", async () => {
+    const { packDerivationPath } = await core();
+    const p = packDerivationPath("m/44'/60'/0'/0/0", false);
+    expect(p[0]).toBe(5);
+    expect(p.readUInt32BE(1)).toBe(0x8000002c); // 44'
+    expect(p.readUInt32BE(13)).toBe(0); //          0, not hardened
+    expect(p.readUInt32BE(17)).toBe(0);
   });
 
   it("plans the chunk reads the app's 255-byte stride needs", async () => {

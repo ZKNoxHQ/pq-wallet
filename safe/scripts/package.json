@@ -6,6 +6,6 @@
   "description": "Host side of the Forge scripts: the ML-DSA-65 software signer the tests drive through vm.ffi, and the ECML-Signer Ledger client.",
   "dependencies": {
     "@ledgerhq/hw-transport-node-hid": "^6.29.0",
-    "@noble/hashes": "^2.4.0"
+    "@noble/hashes": "^2.0.1"
   }
 }

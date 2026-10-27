@@ -32,17 +32,20 @@ export function toBytes(v) {
 
 export const hex = (v) => "0x" + toBytes(v).toString("hex");
 
-/** `m/44'/60'/0'/0'/0'` -> [len, u32 BE × len]. The app forces the hardened bit on every component for the
- *  ML-DSA key but not for the secp256k1 one, so a path that is not already fully hardened gives two keys
- *  from two different trees. This refuses that rather than producing a mismatched pair. */
-export function packDerivationPath(path) {
+/** `m/44'/60'/0'/0'/0'` -> [len, u32 BE × len].
+ *
+ *  ECML-Signer hardens every component of the ML-DSA path and none of the secp256k1 one, so a path that is
+ *  not already fully hardened yields two halves from two different trees; `requireHardened` refuses that
+ *  rather than producing a mismatched pair. The stock Ledger Ethereum app has no such constraint and its
+ *  usual account is m/44'/60'/0'/0/0, hence the opt-out. */
+export function packDerivationPath(path, requireHardened = true) {
   const parts = path.replace(/^m\//, "").split("/").filter(Boolean);
   if (parts.length === 0 || parts.length > 10) throw new Error("a derivation path has 1 to 10 components");
   const out = Buffer.alloc(1 + 4 * parts.length);
   out[0] = parts.length;
   parts.forEach((p, i) => {
     const hardened = p.endsWith("'") || p.endsWith("h");
-    if (!hardened) {
+    if (!hardened && requireHardened) {
       throw new Error(
         `${path}: component "${p}" is not hardened. The app hardens every component of the ML-DSA path and ` +
           `none of the secp256k1 one, so only a fully hardened path gives two halves of the same key.`,
@@ -50,9 +53,27 @@ export function packDerivationPath(path) {
     }
     const n = Number(p.replace(/['h]$/, ""));
     if (!Number.isInteger(n) || n < 0 || n >= 0x80000000) throw new Error(`bad path component "${p}"`);
-    out.writeUInt32BE((n >>> 0) + 0x80000000, 1 + 4 * i);
+    out.writeUInt32BE((n >>> 0) + (hardened ? 0x80000000 : 0), 1 + 4 * i);
   });
   return out;
+}
+
+/** The Ledger Ethereum app's GET_PUBLIC_KEY (INS 0x02) answers
+ *  `[65][uncompressed point][40][address as ASCII hex]`. It states the address itself, and we recompute it
+ *  from the point: if the two disagree, something is answering that is not the app we think. */
+export function parseEthAppAddress(res) {
+  const b = toBytes(res);
+  const pubLen = b[0];
+  if (pubLen !== 65) throw new Error(`expected a 65-byte point, the device announced ${pubLen}`);
+  const addrLen = b[1 + pubLen];
+  if (addrLen !== 40) throw new Error(`expected a 40-character address, the device announced ${addrLen}`);
+  const ascii = b.subarray(2 + pubLen, 2 + pubLen + addrLen).toString("ascii");
+  if (!/^[0-9a-fA-F]{40}$/.test(ascii)) throw new Error(`the device returned "${ascii}", not an address`);
+  const derived = addressFromPubkey(b.subarray(1, 1 + pubLen));
+  if (derived.toLowerCase() !== `0x${ascii.toLowerCase()}`) {
+    throw new Error(`the device's address 0x${ascii} does not match its own public key`);
+  }
+  return derived;
 }
 
 /** keccak256(pubkey[1..65])[12:32], the Ethereum address of an uncompressed secp256k1 point. */

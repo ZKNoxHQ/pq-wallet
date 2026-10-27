@@ -25,19 +25,23 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import {
-  addressFromPubkey, chunkPlan, derToRsv, expandedKey, hex, keccak, packDerivationPath, toBytes,
+  addressFromPubkey, chunkPlan, derToRsv, expandedKey, hex, keccak, packDerivationPath, parseEthAppAddress,
+  toBytes,
   MLDSA65_KEY_BYTES, MLDSA65_PK_BYTES, MLDSA65_SIG_BYTES,
 } from "./ecml-core.mjs";
 
 const CLA = 0xe0;
-const INS = { GET_PUBLIC_KEY: 0x05, GET_SIG_CHUNK: 0x12, GET_PK_CHUNK: 0x13, KEYGEN_DILITHIUM: 0x11, HYBRID_SIGN_HASH: 0x16 };
+const INS = {
+  GET_PUBLIC_KEY: 0x05, GET_SIG_CHUNK: 0x12, GET_PK_CHUNK: 0x13, KEYGEN_DILITHIUM: 0x11, HYBRID_SIGN_HASH: 0x16,
+  ETH_GET_PUBLIC_KEY: 0x02, // the stock Ledger Ethereum app, not ECML-Signer
+};
 const P2_MLDSA_65 = 0x01;
 const SW = {
   0x9000: "ok",
   0x6985: "refused on the device",
   0x6a86: "wrong P1/P2",
   0x6a87: "wrong length",
-  0x6d00: "unknown instruction — is ECML-Signer the open app?",
+  0x6d00: "unknown instruction — is the right app open? `key` and `sign` need ECML-Signer, `address --app eth` needs Ethereum",
   0x6e00: "wrong CLA — another app is open",
   0x6600: "the device failed to sign",
   0x6a84: "not enough memory on the device",
@@ -93,6 +97,33 @@ async function k1Address(dev, path) {
   const len = res[0];
   if (len !== 65) throw new Error(`expected a 65-byte point, the device announced ${len}`);
   return addressFromPubkey(res.subarray(1, 1 + 65));
+}
+
+/** The same question asked of the stock Ledger Ethereum app, which `forge --ledger` is the one driving.
+ *  Its INS is 0x02 and its path need not be hardened, the usual account being m/44'/60'/0'/0/0. */
+async function ethAppAddress(dev, path) {
+  const res = await dev.send(INS.ETH_GET_PUBLIC_KEY, 0x00, 0x00, packDerivationPath(path, false));
+  return parseEthAppAddress(res);
+}
+
+/** The deploying account, as the device states it. `--app eth` asks the stock Ethereum app, which is the
+ *  one `forge --ledger` drives, so the address printed here is the one to pass as --sender. */
+async function cmdAddress() {
+  const app = flag("app", "eth");
+  const path = flag("path", app === "eth" ? "m/44'/60'/0'/0/0" : "m/44'/60'/0'/0'/0'");
+  const bare = args.includes("--bare");
+  const dev = await open();
+  try {
+    const address = app === "eth" ? await ethAppAddress(dev, path) : await k1Address(dev, path);
+    if (bare) process.stdout.write(address);
+    else {
+      console.log(`app             ${app === "eth" ? "Ledger Ethereum" : "ECML-Signer"}`);
+      console.log(`path            ${path}`);
+      console.log(`address         ${address}`);
+    }
+  } finally {
+    await dev.close();
+  }
 }
 
 async function cmdKey() {
@@ -161,8 +192,9 @@ async function cmdSign() {
 
 const usage = `ecml.mjs — ECML-Signer host side
 
-  key   --path <m/44'/60'/0'/0'/0'> [--out keys/holder-1.hex]
-  sign  --path <…> --digest 0x<64 hex> [--out answers/holder-1.json]
+  key     --path <m/44'/60'/0'/0'/0'> [--out keys/holder-1.hex]      ECML-Signer
+  sign    --path <…> --digest 0x<64 hex> [--out answers/…json]        ECML-Signer
+  address [--app eth|ecml] [--path <…>] [--bare]                      eth = the stock Ethereum app
 
 The path must be fully hardened: the app hardens every component of the ML-DSA path and none of the
 secp256k1 one, so anything else gives two halves that do not belong together.`;
@@ -170,6 +202,7 @@ secp256k1 one, so anything else gives two halves that do not belong together.`;
 try {
   if (cmd === "key") await cmdKey();
   else if (cmd === "sign") await cmdSign();
+  else if (cmd === "address") await cmdAddress();
   else {
     console.error(usage);
     process.exit(cmd ? 1 : 0);
