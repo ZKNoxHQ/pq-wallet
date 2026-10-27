@@ -8,5 +8,6 @@ export * from "./plan";
 export * from "./client";
 export * from "./service";
 export * from "./signer";
+export * from "./ledger";
 export * as mldsa65 from "./mldsa65";
 export { MLDSA65 } from "./mldsa65";

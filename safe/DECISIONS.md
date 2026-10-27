@@ -346,3 +346,66 @@ sans revue ni listing), et utilise le SDK pour se configurer :
   colonne) et le Client Gateway, dont `parseSignaturesByType` suppose qu'une
   partie dynamique suit immédiatement sa partie statique — juste pour une
   signature contrat, faux à partir de deux.
+
+## ADR-013 — L'appareil parle à la page, par WebHID
+
+**Contexte**
+
+Jusqu'ici le signeur matériel passait par `safe/scripts/ecml.mjs` : le porteur
+copiait le condensat de la page, lançait une commande, ouvrait le JSON produit
+et recollait quatre champs dans un formulaire. Le dernier, la clé étendue, fait
+38 112 octets, soit 76 226 caractères hexadécimaux. Éprouvé sur Sepolia le
+2026-10-27 : la chaîne complète fonctionne mais ne se montre pas, et chaque
+copie est une occasion de tronquer silencieusement la valeur sur laquelle la
+transaction entière repose.
+
+Le protocole, lui, n'a rien de spécifique à Node : CLA `0xE0`, cinq
+instructions, des lectures par morceaux de 255 octets. Un navigateur Chromium a
+WebHID.
+
+**Décision**
+
+Le dialogue APDU est porté dans `app/packages/safe/src/ledger.ts`, avec le
+**transport injecté** :
+
+```ts
+export type Apdu = (ins, p1, p2, data?) => Promise<Uint8Array>;
+```
+
+`app/apps/safe-signer/src/webhid.ts` fournit l'implémentation navigateur par
+`@ledgerhq/hw-transport-webhid`, et ne contient rien d'autre que le transport.
+`ledgerSigner` rend un `Signer`, la même interface que le porteur logiciel de
+`signer.ts`, donc le front traite les deux identiquement.
+
+`LedgerAccounts` garde les comptes lus entre les owners et cherche celui dont
+`keccak256(clé étendue)` égale le `postQKeyHash` du clone, en balayant
+`m/44'/60'/0'/i'/0'`. Le porteur clique « sign on the device » et n'a plus de
+chemin de dérivation à connaître.
+
+**Conséquences**
+
+- Le chemin matériel est **testé** pour la première fois, sans matériel :
+  `packages/safe/test/ledger.test.ts` fait tourner 20 tests contre une fausse
+  app qui reproduit l'aliasing mémoire du vrai signeur. `GET_PUBLIC_KEY` et
+  `KEYGEN_DILITHIUM` partagent une union avec la signature ML-DSA ; l'un des
+  deux entre `HYBRID_SIGN_HASH` et les lectures par morceaux détruit ce qui est
+  en train d'être lu. La fausse app refuse alors de répondre, donc la règle est
+  vérifiée et non documentée.
+- `signWithAccount` ne redemande jamais l'adresse k1 à l'appareil après `0x16`,
+  justement à cause de cette union : elle vient du compte déjà lu. Et elle
+  compare la clé renvoyée après signature à celle lue avant, ce qui attrape un
+  appareil qui aurait changé de compte en cours de route.
+- Un balayage coûte neuf APDU par compte, environ une seconde. Le cache rend le
+  second owner immédiat, puisque c'est presque toujours un autre compte du même
+  appareil.
+- WebHID exige un contexte sécurisé et un geste de l'utilisateur, et **n'est pas
+  accordé à une iframe de bac à sable** : dans Safe{Wallet} le bouton est
+  remplacé par la raison. La page le dit et renvoie vers un onglet propre, où le
+  lien de `session.ts` porte déjà toute la configuration.
+- `@ledgerhq/hw-transport` construit ses trames avec `Buffer`, absent du
+  navigateur. Une ligne dans `main.tsx` le pose sur `globalThis`, et nulle part
+  ailleurs : le reste de l'application parle `Uint8Array` et `Hex`.
+- Les champs de collage restent, derrière « paste from the command line
+  instead ». Un porteur sur Firefox, ou un appareil sur une autre machine que
+  celle qui tient la page, en a encore besoin — et `ecml.mjs` reste la référence
+  contre laquelle le portage a été écrit.

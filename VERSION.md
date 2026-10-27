@@ -3,21 +3,32 @@
 Ce fichier suit la disposition du dépôt et les pins. Le détail par périmètre reste dans
 `contracts/VERSION.md` et `safe/VERSION.md`, et les décisions dans les `DECISIONS.md` correspondants.
 
-## [0.8.1] 2026-10-26 : les cibles de test construisent dabord
+## [0.9.0] 2026-10-27 : l'appareil parle à la page
+
+### Added
+- `app/packages/safe/src/ledger.ts` : le dialogue APDU de l'ECML-Signer, transport injecté. `ledgerSigner`
+  rend un `Signer`, la même interface que le porteur logiciel, et `LedgerAccounts` trouve le compte dont
+  `keccak256(clé étendue)` égale le `postQKeyHash` du clone en balayant `m/44'/60'/0'/i'/0'`.
+- `app/apps/safe-signer/src/webhid.ts` : l’implémentation navigateur, par `@ledgerhq/hw-transport-webhid`.
+  Elle ne contient que le transport, et `webHidObstacle()` dit pourquoi il n'est pas disponible plutôt que
+  d'afficher un bouton mort.
+- `app/packages/safe/test/ledger.test.ts` : 20 tests contre une fausse app qui reproduit l'aliasing mémoire
+  du vrai signeur. Le chemin matériel avait zéro couverture jusqu'ici. Voir ADR-013 dans
+  `safe/DECISIONS.md`.
+
+### Changed
+- Bloc 3 du front : un bouton « sign on the device » remplace la copie du condensat, la commande dans un
+  terminal et le recollage de 76 226 caractères hexadécimaux. Les champs manuels restent derrière
+  « paste from the command line instead ».
+
+## [0.8.1] 2026-10-26 : les cibles de test construisent d'abord
 
 ### Fixed
-- `make test-safe` echouait sur `artifact not found` dans un clone neuf. Les sources Safe sont compilees
+- `make test-safe` échouait sur `artifact not found` dans un clone neuf. Les sources Safe sont compilées
   sous leur propre profil et atteintes uniquement par `deployCode` : rien ne les importe, donc `forge test`
-  ne les produit pas. `test-safe`, `test-safe-gas`, `safe-front-fixture` et `test-contracts` dependent
-  desormais de leur cible de construction. Releve sur un clone depuis zero, le seul vrai test du depot.
+  ne les produit pas. `test-safe`, `test-safe-gas`, `safe-front-fixture` et `test-contracts` dépendent
+  maintenant de leur cible de construction. Relevé sur un clone depuis zéro, qui est le seul test du dépôt.
 
-   
-   ## [0.8.1] 2026-10-26 : les cibles de test construisent dabord
-   
-   ### Fixed
-   - `make test-safe` echouait sur `artifact not found` dans un clone neuf. Les sources Safe sont compilees
-     sous leur propre profil et atteintes uniquement par `deployCode`. Les cibles de test dependent
-     desormais de leur cible de construction.
 ## [0.8.0] 2026-10-23 : de quoi faire la démonstration sur Sepolia
 
 ### Added

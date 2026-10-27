@@ -31,11 +31,30 @@ const Owner: React.FC<{
   signers: Signer[];
   onAnswer: (a: PqAnswer) => void;
   onForget: () => void;
-}> = ({ info, digest, answer, signers, onAnswer, onForget }) => {
+  /** drives the device over WebHID: finds the account that owns this clone, then signs */
+  onDevice?: (info: PqOwnerInfo, digest: Hex) => Promise<PqAnswer>;
+  deviceObstacle?: string | null;
+  deviceName?: string | null;
+}> = ({ info, digest, answer, signers, onAnswer, onForget, onDevice, deviceObstacle, deviceName }) => {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [paste, setPaste] = useState({ k1Address: "", k1Signature: "", expandedKey: "", pqSignature: "" });
+  const [manual, setManual] = useState(false);
+
+  const signOnDevice = async () => {
+    if (!onDevice) return;
+    setErr(null);
+    setBusy("device");
+    try {
+      onAnswer(await onDevice(info, digest));
+      setOpen(false);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const signLocally = async (s: Signer) => {
     setErr(null);
@@ -148,7 +167,40 @@ const Owner: React.FC<{
               </div>
             </div>
           )}
-          <span style={label}>from a device</span>
+          <div style={{ marginBottom: 14 }}>
+            <span style={label}>hardware holder</span>
+            {deviceObstacle ? (
+              <Note tone="warn">{deviceObstacle}</Note>
+            ) : (
+              <>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <button style={button()} onClick={() => void signOnDevice()} disabled={!!busy}>
+                    {busy === "device" ? "on the device…" : "sign on the device"}
+                  </button>
+                  {busy === "device" && <Spinner />}
+                  {deviceName && !busy && (
+                    <span style={{ ...mono(11), color: C.faint }}>{deviceName}</span>
+                  )}
+                </div>
+                <p style={{ margin: "7px 0 0", fontSize: 11, color: C.faint, lineHeight: 1.5 }}>
+                  ECML-Signer open, blind signing on. This page asks each account of the device for its
+                  ML-DSA-65 key until one hashes to what this clone stores, then sends the digest above for
+                  signature. The key never leaves the device except as the public half, which travels in the
+                  transaction anyway.
+                </p>
+              </>
+            )}
+            <button
+              style={{ ...button("ghost"), padding: "4px 10px", fontSize: 11, marginTop: 10 }}
+              onClick={() => setManual(!manual)}
+            >
+              {manual ? "hide the manual fields" : "paste from the command line instead"}
+            </button>
+          </div>
+
+          {manual && (
+            <>
+          <span style={label}>from a device, by hand</span>
           <div style={{ display: "grid", gap: 8 }}>
             {(
               [
@@ -173,6 +225,8 @@ const Owner: React.FC<{
           <button style={{ ...button(), marginTop: 10 }} onClick={takePaste}>
             take this signature
           </button>
+            </>
+          )}
         </div>
       )}
 
@@ -190,7 +244,13 @@ export const Owners: React.FC<{
   pqSafeTxHash: Hex;
   onAnswer: (a: PqAnswer) => void;
   onForget: (owner: Address) => void;
-}> = ({ owners, digests, answers, signers, k, pqSafeTxHash, onAnswer, onForget }) => {
+  onDevice?: (info: PqOwnerInfo, digest: Hex) => Promise<PqAnswer>;
+  deviceObstacle?: string | null;
+  deviceName?: string | null;
+}> = ({
+  owners, digests, answers, signers, k, pqSafeTxHash, onAnswer, onForget, onDevice, deviceObstacle,
+  deviceName,
+}) => {
   const have = Object.keys(answers).length;
   const byOwner = new Map(digests.map((d) => [d.owner.toLowerCase(), d.digest]));
   return (
@@ -233,6 +293,9 @@ export const Owners: React.FC<{
               signers={signers}
               onAnswer={onAnswer}
               onForget={() => onForget(info.address)}
+              onDevice={onDevice}
+              deviceObstacle={deviceObstacle}
+              deviceName={deviceName}
             />
           );
         })}

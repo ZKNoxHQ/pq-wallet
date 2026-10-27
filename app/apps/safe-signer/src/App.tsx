@@ -11,16 +11,16 @@
 // Everything is recomputed locally from the Safe's parameters. A digest read from a service is a digest a
 // holder cannot check, and checking it against the device screen is the only thing standing between a
 // signature and the wrong transaction.
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createWalletClient, custom, formatEther, getAddress, http, isHex, parseEther,
   type Address, type Hex, type PublicClient, type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
-  approveHashPlan, approveHashPlanFor, confirmSafeTxHash, pendingTransactions, pqChildTransaction,
-  rootApprovedSignature, safeTxHash, type ApproveHashPlan, type NestedSafe, type PqAnswer, type ProposedTx,
-  type SafeTx,
+  approveHashPlan, approveHashPlanFor, confirmSafeTxHash, LedgerAccounts, pendingTransactions,
+  pqChildTransaction, rootApprovedSignature, safeTxHash, type ApproveHashPlan, type NestedSafe,
+  type PqAnswer, type PqOwnerInfo, type ProposedTx, type SafeTx,
 } from "@zknox/pq-safe";
 import { Setup } from "./blocks/Setup";
 import { Transaction, type TxSource } from "./blocks/Transaction";
@@ -33,6 +33,7 @@ import {
   chainFor, rpcUrlFor, type Config, type Loaded,
 } from "./session";
 import { connectSafeApp, discover, isFramed, safeAppTransport, type Discovery, type SafeAppContext } from "./safeApp";
+import { openLedger, webHidObstacle, type LedgerLink } from "./webhid";
 
 const env = import.meta.env as Record<string, string | undefined>;
 const EXPLORERS: Record<number, string> = {
@@ -71,6 +72,7 @@ export default function App() {
   const [estimateErr, setEstimateErr] = useState<string | null>(null);
   const [sendState, setSendState] = useState<SendState>({ phase: "idle" });
   const [wallet, setWallet] = useState<{ client: WalletClient; address: Address } | null>(null);
+  const [deviceName, setDeviceName] = useState<string | null>(null);
 
   const hosted = hostState === "hosted" && !!host;
   const cfg = isComplete(draft, hosted) ? (draft as Config) : null;
@@ -80,6 +82,44 @@ export default function App() {
     [cfg?.rpcUrl, cfg?.chainId, transport],
   );
   const signers = useMemo(devSigners, []);
+
+  // ---- the hardware holder. One link for the whole session: a scan costs nine APDUs per account, and the
+  // second owner of an arrangement is almost always another account of the same device.
+  const device = useRef<{ link: LedgerLink; accounts: LedgerAccounts } | null>(null);
+  const deviceObstacle = useMemo(webHidObstacle, []);
+
+  const onDevice = useCallback(async (info: PqOwnerInfo, digest: Hex): Promise<PqAnswer> => {
+    if (!device.current) {
+      const link = await openLedger();
+      device.current = { link, accounts: new LedgerAccounts(link.send) };
+      setDeviceName(link.name);
+    }
+    const { accounts } = device.current;
+    const account = await accounts.find(info.postQKeyHash);
+    if (!account) {
+      const seen = accounts.known.map((a) => `${a.path} (${a.k1Address})`).join(", ");
+      throw new Error(
+        `no account of this device holds the ML-DSA-65 key ${info.postQKeyHash.slice(0, 10)}… that this ` +
+          `clone stores. Looked at ${seen || "none"}. Is this the right device, or the right clone?`,
+      );
+    }
+    if (account.preQKeyHash.toLowerCase() !== info.preQKeyHash.toLowerCase()) {
+      throw new Error(
+        `the device's ML-DSA-65 key at ${account.path} matches this clone, but its secp256k1 address ` +
+          `${account.k1Address} does not: the clone was created from two halves of different accounts.`,
+      );
+    }
+    return accounts.signAs(account, info.address, digest);
+  }, []);
+
+  // A device left open holds the USB interface, which blocks Ledger Live and the CLI.
+  useEffect(
+    () => () => {
+      void device.current?.link.close().catch(() => {});
+      device.current = null;
+    },
+    [],
+  );
 
   // Connect to the host once, then let it say which Safe the user is looking at and work the rest out.
   useEffect(() => {
@@ -408,6 +448,9 @@ export default function App() {
                 return next;
               })
             }
+            onDevice={onDevice}
+            deviceObstacle={deviceObstacle}
+            deviceName={deviceName}
           />
         )}
 
