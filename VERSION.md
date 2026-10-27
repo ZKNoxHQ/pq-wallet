@@ -16,10 +16,33 @@ Ce fichier suit la disposition du dépôt et les pins. Le détail par périmètr
   du vrai signeur. Le chemin matériel avait zéro couverture jusqu'ici. Voir ADR-013 dans
   `safe/DECISIONS.md`.
 
+- `safe/script/CreateArrangement.s.sol` : les owners post-quantiques, les deux enfants et le root en une
+  seule exécution, là où il fallait cinq invocations et trois adresses recopiées d'une sortie dans la
+  suivante. Le nombre de signatures ne change pas, un appareil confirmant chaque transaction, mais rien
+  n'est retapé entre elles et une exécution interrompue se reprend : chaque création est prédite avant
+  d'être envoyée et sautée si l'adresse porte déjà du code, et le sel de chaque Safe vient de son ensemble
+  d'owners plutôt que de `block.timestamp`. Relevé sur Sepolia le 2026-10-27, où un RPC public a décalé le
+  nonce entre deux lectures et laissé deux arrangements à moitié construits. Une reprise n'envoie que
+  ce qui manque : un `createAccount` sur un clone existant ne crée rien mais porte quand même ses 38 kB
+  de calldata, soit ~1,2 M de plancher EIP-7623 pour un appel sans effet. Cible
+  `safe-create-arrangement`.
+- `safe/test/CreateArrangement.t.sol` : les deux affirmations sur lesquelles cette reprise repose, l'adresse
+  CREATE2 recalculée hors du factory et le sel indépendant de l'horloge.
+
 ### Changed
 - Bloc 3 du front : un bouton « sign on the device » remplace la copie du condensat, la commande dans un
   terminal et le recollage de 76 226 caractères hexadécimaux. Les champs manuels restent derrière
   « paste from the command line instead ».
+
+### Fixed
+- `packDerivationPath` refusait un chemin non entièrement durci dans les deux clients. Lecture du code de
+  `ZKNoxHQ/ecml-signer` à `e2fee68` : l'app utilise le chemin **brut** pour la secp256k1 et force le bit
+  durci sur chaque composant pour la ML-DSA, et aucun handler ne contrôle quoi que ce soit. Le garde-fou
+  refusait donc l'entrée prévue, `m/44'/60'/0'/0/x`, celle dont la moitié k1 est le compte ordinaire de
+  Rabby et de `forge --ledger`. Le balayage essaie maintenant les deux familles, et la recherche prend les
+  deux condensats — la forme durcie et la forme logique d'un même index partagent leur clé ML-DSA et
+  diffèrent en k1, donc chercher par `postQKeyHash` seul peut apparier la bonne clé au mauvais partenaire.
+  Voir ADR-014.
 
 ## [0.8.1] 2026-10-26 : les cibles de test construisent d'abord
 

@@ -48,6 +48,10 @@ interface ISafeExecution {
 }
 
 interface ISafeProxyFactory {
+    /// The SafeProxy creation code the factory deploys, needed to predict a proxy's address before
+    /// creating it — which is how a re-run tells "already there" from "about to make a second one".
+    function proxyCreationCode() external pure returns (bytes memory);
+
     function createProxyWithNonce(address singleton, bytes memory initializer, uint256 saltNonce)
         external
         returns (address proxy);
