@@ -102,13 +102,21 @@ describe.skipIf(!ready)("ECML-Signer host conversions", () => {
     expect(out.toLowerCase()).toBe(expandedPublicKey(publicKey).toLowerCase());
   });
 
-  it("only accepts a fully hardened path, since the two halves derive differently", async () => {
+  it("packs a fully hardened path", async () => {
     const { packDerivationPath } = await core();
-    expect(() => packDerivationPath("m/44'/60'/0'/0/0")).toThrow(/hardened/);
     const p = packDerivationPath("m/44'/60'/0'/0'/0'");
     expect(p[0]).toBe(5);
     expect(p.length).toBe(21);
     expect(p.readUInt32BE(1)).toBe(0x8000002c); // 44'
+  });
+
+  it("and the ordinary BIP-44 path, which the app's own derivation expects", async () => {
+    // ecml-signer uses the path raw for secp256k1 and forces hardening for ML-DSA, so a non-hardened
+    // path is the intended input rather than a mistake (src/crypto/mldsa_derive.c).
+    const { packDerivationPath } = await core();
+    const p = packDerivationPath("m/44'/60'/0'/0/0");
+    expect(p.readUInt32BE(13)).toBe(0);
+    expect(() => packDerivationPath("m/44'/60'/0'/0/0", true)).toThrow(/hardened/);
   });
 
   it("reads the deploying address out of the stock Ethereum app's answer", async () => {

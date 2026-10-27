@@ -409,3 +409,57 @@ chemin de dérivation à connaître.
   instead ». Un porteur sur Firefox, ou un appareil sur une autre machine que
   celle qui tient la page, en a encore besoin — et `ecml.mjs` reste la référence
   contre laquelle le portage a été écrit.
+
+## ADR-014 — Un seul chemin logique, deux moitiés : correction d'ADR-009
+
+**Contexte**
+
+ADR-009 et le client de `safe/scripts/` posaient qu'un chemin devait être
+**entièrement durci**, au motif qu'ECML-Signer durcit la dérivation ML-DSA et
+pas la secp256k1, et qu'un chemin mixte donnerait deux moitiés étrangères l'une
+à l'autre. Lecture du code de l'app le 2026-10-27, `ZKNoxHQ/ecml-signer` à
+`e2fee68` :
+
+- `src/crypto/mldsa_derive.c` force `| 0x80000000u` sur chaque composant avant
+  `os_derive_bip32_with_seed_no_throw(HDW_ED25519_SLIP10, …)`, parce que
+  SLIP-0010 en mode ed25519 l'exige. Son commentaire dit l'intention : « so
+  callers can pass a "logical" path (like the standard m/44'/60'/0'/0/0 they use
+  for ECDSA) […] ECDSA half sees the raw path, ML-DSA half sees the hardened
+  variant » ;
+- la moitié k1 passe par `bip32_derive_ecdsa_sign_hash_256` avec
+  `G_context.bip32_path` **tel quel** (`src/ui/action/validate.c:45`) ;
+- aucun handler ne contrôle le durcissement. `get_public_key.c`,
+  `pq_keygen.c`, `hybrid_sign_hash.c` lisent le chemin par
+  `buffer_read_bip32_path`, qui ne regarde pas les bits.
+
+Le garde-fou refusait donc exactement l'entrée pour laquelle l'app est écrite.
+
+**Décision**
+
+`packDerivationPath` accepte les deux formes, `requireHardened` passe à `false`
+par défaut dans les deux implémentations (`safe/scripts/ecml-core.mjs` et
+`app/packages/safe/src/ledger.ts`). Le balayage de `LedgerAccounts` essaie les
+deux familles, `m/44'/60'/0'/0/i` d'abord puisque c'est le cas courant, puis
+`m/44'/60'/0'/i'/0'`.
+
+**Conséquences**
+
+- Avec un chemin logique, la moitié k1 d'un clone **est** le compte ordinaire
+  que Rabby, MetaMask et `forge --ledger` dérivent. L'aller-retour entre
+  ECML-Signer et l'app Ethereum, qui a coûté une bonne heure le 2026-10-27,
+  n'était pas une contrainte de l'appareil mais une conséquence de ce
+  garde-fou.
+- La clé ML-DSA ne dépend pas du choix : les deux formes aboutissent au même
+  chemin durci. `m/44'/60'/0'/0/0` et `m/44'/60'/0'/0'/0'` donnent la même clé
+  post-quantique et deux adresses k1 différentes.
+- D'où un piège que `LedgerAccounts.find` doit éviter : chercher l'appareil par
+  `postQKeyHash` seul peut rendre la bonne clé ML-DSA avec le mauvais
+  partenaire k1. La recherche prend les deux condensats, et le front dit lequel
+  des deux a manqué.
+- Les clones déjà déployés sur Sepolia et Hoodi restent valides, liés aux
+  adresses k1 des chemins durcis. Ils ne sont pas pilotables par un portefeuille
+  standard du côté k1, ce qui est sans effet sur l'arrangement — la moitié
+  ECDSA de la politique vient de `S_ecdsa`, pas de la moitié k1 des clones.
+- Un prochain arrangement se crée avec `m/44'/60'/0'/0/i`. Les défauts de
+  `ecml.mjs` gardent la forme durcie, pour qu'une commande sans `--path`
+  continue de correspondre aux clones existants.

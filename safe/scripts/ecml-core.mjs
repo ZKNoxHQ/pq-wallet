@@ -32,13 +32,21 @@ export function toBytes(v) {
 
 export const hex = (v) => "0x" + toBytes(v).toString("hex");
 
-/** `m/44'/60'/0'/0'/0'` -> [len, u32 BE × len].
+/** `m/44'/60'/0'/0/0` -> [len, u32 BE × len].
  *
- *  ECML-Signer hardens every component of the ML-DSA path and none of the secp256k1 one, so a path that is
- *  not already fully hardened yields two halves from two different trees; `requireHardened` refuses that
- *  rather than producing a mismatched pair. The stock Ledger Ethereum app has no such constraint and its
- *  usual account is m/44'/60'/0'/0/0, hence the opt-out. */
-export function packDerivationPath(path, requireHardened = true) {
+ *  Either form is valid. The app takes ONE path and derives each half by its own scheme's rules
+ *  (ecml-signer at e2fee68, src/crypto/mldsa_derive.c): the secp256k1 half uses the path **raw**, while the
+ *  ML-DSA half forces the hardened bit on every component, SLIP-0010 in ed25519 mode requiring it. No
+ *  handler rejects a non-hardened path, and `buffer_read_bip32_path` does not look.
+ *
+ *  So the intended input is the ordinary `m/44'/60'/0'/0/x`: the k1 half is then the same account Rabby and
+ *  `forge --ledger` derive, and the ML-DSA half comes from `m/44'/60'/0'/0'/x'`. An already-hardened path is
+ *  equally consistent — the ML-DSA key is identical, both forms mapping to the same hardened variant — but
+ *  its k1 half sits where no standard wallet will look. This repository's own clones were created that way,
+ *  which is why both families are tried when a device is searched.
+ *
+ *  `requireHardened` stays for a caller that wants the stricter form, and defaults off. */
+export function packDerivationPath(path, requireHardened = false) {
   const parts = path.replace(/^m\//, "").split("/").filter(Boolean);
   if (parts.length === 0 || parts.length > 10) throw new Error("a derivation path has 1 to 10 components");
   const out = Buffer.alloc(1 + 4 * parts.length);
@@ -46,10 +54,7 @@ export function packDerivationPath(path, requireHardened = true) {
   parts.forEach((p, i) => {
     const hardened = p.endsWith("'") || p.endsWith("h");
     if (!hardened && requireHardened) {
-      throw new Error(
-        `${path}: component "${p}" is not hardened. The app hardens every component of the ML-DSA path and ` +
-          `none of the secp256k1 one, so only a fully hardened path gives two halves of the same key.`,
-      );
+      throw new Error(`${path}: component "${p}" is not hardened, and this caller asked for hardened only`);
     }
     const n = Number(p.replace(/['h]$/, ""));
     if (!Number.isInteger(n) || n < 0 || n >= 0x80000000) throw new Error(`bad path component "${p}"`);

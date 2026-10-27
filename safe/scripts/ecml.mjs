@@ -196,8 +196,12 @@ const usage = `ecml.mjs — ECML-Signer host side
   sign    --path <…> --digest 0x<64 hex> [--out answers/…json]        ECML-Signer
   address [--app eth|ecml] [--path <…>] [--bare]                      eth = the stock Ethereum app
 
-The path must be fully hardened: the app hardens every component of the ML-DSA path and none of the
-secp256k1 one, so anything else gives two halves that do not belong together.`;
+One path, two halves, each derived by its own scheme's rules: the app uses the path RAW for secp256k1 and
+forces the hardened bit on every component for ML-DSA (ecml-signer, src/crypto/mldsa_derive.c). So
+`m/44'/60'/0'/0/0` gives a k1 half that Rabby and `forge --ledger` also derive, and an ML-DSA half from
+`m/44'/60'/0'/0'/0'`. A hardened path is just as consistent, and is what this repository's clones were
+created from, but its k1 half is at a path no standard wallet offers. The defaults above keep that form so
+they still match those clones.`;
 
 try {
   if (cmd === "key") await cmdKey();

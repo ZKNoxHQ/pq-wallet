@@ -61,12 +61,21 @@ export const STATUS_WORDS = Object.keys(SW).map(Number);
 
 const hexOf = (b: Uint8Array): Hex => bytesToHex(b);
 
-/** `m/44'/60'/0'/0'/0'` -> [len][u32 BE x len].
+/** `m/44'/60'/0'/0/0` -> [len][u32 BE x len].
  *
- *  ECML-Signer hardens every component of the ML-DSA path and none of the secp256k1 one, so a path that is
- *  not already fully hardened yields two halves from two different trees. Refusing it here is cheaper than
- *  discovering it as a 3.9 M gas revert. */
-export function packDerivationPath(path: string, requireHardened = true): Uint8Array {
+ *  Either form is valid, and the difference is worth knowing. The app takes one path and derives each half
+ *  by its own scheme's rules (`src/crypto/mldsa_derive.c`, ecml-signer at e2fee68): the secp256k1 half uses
+ *  the path **raw**, while the ML-DSA half forces the hardened bit on every component, because SLIP-0010 in
+ *  ed25519 mode requires it. No handler rejects a non-hardened path.
+ *
+ *  So the intended input is the ordinary `m/44'/60'/0'/0/x`: the k1 half is then the same account Rabby,
+ *  MetaMask and `forge --ledger` derive, and the ML-DSA half comes from `m/44'/60'/0'/0'/x'`. Passing an
+ *  already-hardened path is equally consistent — the ML-DSA key is identical, since both forms map to the
+ *  same hardened variant — but the k1 half then sits where no standard wallet will look for it.
+ *
+ *  `requireHardened` is kept for callers that want the stricter form; it defaults off, because refusing the
+ *  logical path refuses the app's own design. */
+export function packDerivationPath(path: string, requireHardened = false): Uint8Array {
   const parts = path.replace(/^m\//, "").split("/").filter(Boolean);
   if (parts.length === 0 || parts.length > 10) throw new Error("a derivation path has 1 to 10 components");
   const out = new Uint8Array(1 + 4 * parts.length);
@@ -75,10 +84,7 @@ export function packDerivationPath(path: string, requireHardened = true): Uint8A
   parts.forEach((p, i) => {
     const hardened = p.endsWith("'") || p.endsWith("h");
     if (!hardened && requireHardened) {
-      throw new Error(
-        `${path}: component "${p}" is not hardened. ECML-Signer hardens every component of the ML-DSA ` +
-          `path and none of the secp256k1 one, so only a fully hardened path gives two halves of one key.`,
-      );
+      throw new Error(`${path}: component "${p}" is not hardened, and this caller asked for hardened only`);
     }
     const n = Number(p.replace(/['h]$/, ""));
     if (!Number.isInteger(n) || n < 0 || n >= 0x80000000) throw new Error(`bad path component "${p}"`);
@@ -228,10 +234,14 @@ export function ledgerSigner(send: Apdu, account: DeviceAccount, label = "ledger
   };
 }
 
-/** The paths this app scans when looking for the account that owns a clone: one holder per account index,
- *  which is how `safe/SEPOLIA.md` hands them out. */
+/** The paths this app scans when looking for the account that owns a clone.
+ *
+ *  Two families, because both are in use and they are not interchangeable on the k1 side. `m/44'/60'/0'/0/i`
+ *  is the ordinary BIP-44 account, which is what the app's own derivation expects and what every wallet
+ *  shows. `m/44'/60'/0'/i'/0'` is what this repository's own clones were created from, before the app's
+ *  source settled the question. Interleaved by index so the common case is found first. */
 export const defaultPaths = (count = 5): string[] =>
-  Array.from({ length: count }, (_, i) => `m/44'/60'/0'/${i}'/0'`);
+  Array.from({ length: count }, (_, i) => [`m/44'/60'/0'/0/${i}`, `m/44'/60'/0'/${i}'/0'`]).flat();
 
 /** Keeps the device's accounts between owners: a scan costs nine APDUs per path, and the second owner of
  *  the same arrangement is almost always another account of the same device. */
@@ -258,14 +268,23 @@ export class LedgerAccounts {
     return signWithAccount(this.send, account, owner, digest);
   }
 
-  /** The account whose ML-DSA-65 key is the one a clone stores, or null if none of `paths` matches. */
-  async find(postQKeyHash: Hex, paths = defaultPaths()): Promise<DeviceAccount | null> {
-    const want = postQKeyHash.toLowerCase();
-    for (const a of this.cache.values()) if (a.postQKeyHash.toLowerCase() === want) return a;
+  /** The account whose keys are the ones a clone stores, or null if none of `paths` matches.
+   *
+   *  Both hashes matter, and `postQKeyHash` alone is not enough: the hardened and the logical form of one
+   *  account index yield the *same* ML-DSA key and different secp256k1 addresses, so matching on the
+   *  post-quantum half alone can return the right key with the wrong partner. Pass `preQKeyHash` whenever
+   *  the clone is known, which is always in this front. */
+  async find(postQKeyHash: Hex, preQKeyHash?: Hex, paths = defaultPaths()): Promise<DeviceAccount | null> {
+    const post = postQKeyHash.toLowerCase();
+    const pre = preQKeyHash?.toLowerCase();
+    const fits = (a: DeviceAccount) =>
+      a.postQKeyHash.toLowerCase() === post && (!pre || a.preQKeyHash.toLowerCase() === pre);
+
+    for (const a of this.cache.values()) if (fits(a)) return a;
     for (const path of paths) {
       if (this.cache.has(path)) continue;
       const a = await this.at(path);
-      if (a.postQKeyHash.toLowerCase() === want) return a;
+      if (fits(a)) return a;
     }
     return null;
   }

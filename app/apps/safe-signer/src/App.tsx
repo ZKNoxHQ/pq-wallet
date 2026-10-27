@@ -95,21 +95,25 @@ export default function App() {
       setDeviceName(link.name);
     }
     const { accounts } = device.current;
-    const account = await accounts.find(info.postQKeyHash);
-    if (!account) {
-      const seen = accounts.known.map((a) => `${a.path} (${a.k1Address})`).join(", ");
+    const account = await accounts.find(info.postQKeyHash, info.preQKeyHash);
+    if (account) return accounts.signAs(account, info.address, digest);
+
+    // The ML-DSA key alone can match while the secp256k1 half does not: the hardened and the logical form
+    // of one account index share their post-quantum key. Saying which of the two failed is the difference
+    // between a usable error and "it did not work".
+    const halfway = await accounts.find(info.postQKeyHash);
+    if (halfway) {
       throw new Error(
-        `no account of this device holds the ML-DSA-65 key ${info.postQKeyHash.slice(0, 10)}… that this ` +
-          `clone stores. Looked at ${seen || "none"}. Is this the right device, or the right clone?`,
+        `the device's ML-DSA-65 key at ${halfway.path} is the one this clone stores, but its secp256k1 ` +
+          `address there is ${halfway.k1Address}, which is not the clone's. The two halves were taken from ` +
+          `different paths when the clone was created.`,
       );
     }
-    if (account.preQKeyHash.toLowerCase() !== info.preQKeyHash.toLowerCase()) {
-      throw new Error(
-        `the device's ML-DSA-65 key at ${account.path} matches this clone, but its secp256k1 address ` +
-          `${account.k1Address} does not: the clone was created from two halves of different accounts.`,
-      );
-    }
-    return accounts.signAs(account, info.address, digest);
+    const seen = accounts.known.map((a) => a.path).join(", ");
+    throw new Error(
+      `no account of this device holds the ML-DSA-65 key ${info.postQKeyHash.slice(0, 10)}… that this ` +
+        `clone stores. Looked at ${seen || "none"}. Is this the right device, or the right clone?`,
+    );
   }, []);
 
   // A device left open holds the USB interface, which blocks Ledger Live and the CLI.

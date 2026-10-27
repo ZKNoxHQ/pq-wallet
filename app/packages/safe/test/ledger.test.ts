@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { hexToBytes, keccak256, recoverAddress, stringToBytes, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
-  CLA, INS, LedgerAccounts, MLDSA65, addressFromPubkey, chunkPlan, derToRsv, ledgerSigner,
+  CLA, INS, LedgerAccounts, MLDSA65, addressFromPubkey, chunkPlan, defaultPaths, derToRsv, ledgerSigner,
   packDerivationPath, parseDer, readAccount, signWithAccount,
 } from "../src";
 import { expandedPublicKey, keygen, sign as mldsaSign, verify as mldsaVerify } from "../src/mldsa65";
@@ -119,13 +119,17 @@ describe("packDerivationPath", () => {
     expect(new DataView(p.buffer).getUint32(1, false)).toBe(0x8000002c);
   });
 
-  it("refuses a path that is not fully hardened, since the two halves derive differently", () => {
-    expect(() => packDerivationPath("m/44'/60'/0'/0/0")).toThrow(/hardened/);
+  it("accepts the ordinary BIP-44 path, which is what the app's own derivation expects", () => {
+    // The device uses the path raw for secp256k1 and forces hardening for ML-DSA, so a non-hardened path
+    // is not a mistake: it is the intended input (ecml-signer, src/crypto/mldsa_derive.c).
+    const p = packDerivationPath("m/44'/60'/0'/0/0");
+    expect(p[0]).toBe(5);
+    expect(new DataView(p.buffer).getUint32(13, false)).toBe(0);
+    expect(new DataView(p.buffer).getUint32(17, false)).toBe(0);
   });
 
-  it("packs a non-hardened path when explicitly asked", () => {
-    const p = packDerivationPath("m/44'/60'/0'/0/0", false);
-    expect(new DataView(p.buffer).getUint32(13, false)).toBe(0);
+  it("still refuses one when the caller asks for hardened only", () => {
+    expect(() => packDerivationPath("m/44'/60'/0'/0/0", true)).toThrow(/hardened/);
   });
 });
 
@@ -238,16 +242,36 @@ describe("signWithAccount", () => {
 });
 
 describe("LedgerAccounts", () => {
-  it("finds the account whose key a clone stores, and scans no further", async () => {
+  it("finds the account whose keys a clone stores, and scans no further", async () => {
     const dev = fakeDevice();
     const accounts = new LedgerAccounts(dev.send);
-    const want = (await readAccount(dev.send, "m/44'/60'/0'/2'/0'")).postQKeyHash;
+    const want = await readAccount(dev.send, "m/44'/60'/0'/0/1");
     const derivationsBefore = dev.derivations;
 
-    const found = await accounts.find(want);
-    expect(found?.path).toBe("m/44'/60'/0'/2'/0'");
-    // paths 0, 1, 2 only: it stops at the match rather than reading all five
+    const found = await accounts.find(want.postQKeyHash, want.preQKeyHash);
+    expect(found?.path).toBe("m/44'/60'/0'/0/1");
+    // the two families interleaved: 0/0, 0'/0', 0/1 — it stops at the match
     expect(dev.derivations - derivationsBefore).toBe(3);
+  });
+
+  it("scans both path families, since both are in use", () => {
+    const paths = defaultPaths(3);
+    expect(paths).toEqual([
+      "m/44'/60'/0'/0/0", "m/44'/60'/0'/0'/0'",
+      "m/44'/60'/0'/0/1", "m/44'/60'/0'/1'/0'",
+      "m/44'/60'/0'/0/2", "m/44'/60'/0'/2'/0'",
+    ]);
+  });
+
+  it("will not pair the right ML-DSA key with the wrong secp256k1 half", async () => {
+    // On a real device m/44'/60'/0'/0/0 and m/44'/60'/0'/0'/0' share their ML-DSA key and differ in k1,
+    // which is exactly the confusion `preQKeyHash` exists to catch.
+    const dev = fakeDevice();
+    const accounts = new LedgerAccounts(dev.send);
+    const a = await accounts.at("m/44'/60'/0'/0/0");
+    const b = await accounts.at("m/44'/60'/0'/1'/0'");
+    expect(await accounts.find(a.postQKeyHash, b.preQKeyHash)).toBeNull();
+    expect(await accounts.find(a.postQKeyHash, a.preQKeyHash)).toEqual(a);
   });
 
   it("answers from cache the second time, so a second owner costs no APDU", async () => {
