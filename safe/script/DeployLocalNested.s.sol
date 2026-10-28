@@ -35,6 +35,12 @@ contract DeployLocalNested is Script {
     /// anvil's first accounts: the EOA owners of S_ecdsa
     uint256 constant ANVIL_PK0 = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
 
+    /// written next to the arrangement: what a front needs to create further clones and Safes on this chain
+    address internal pqFactory;
+    address internal safeSingleton;
+    address internal safeProxyFactory;
+    address internal fallbackHandler;
+
     function run() external {
         uint256 deployerPk = vm.envOr("DEPLOYER_KEY", ANVIL_PK0);
         uint256 k = vm.envOr("K", uint256(2));
@@ -58,6 +64,10 @@ contract DeployLocalNested is Script {
         address handler =
             deployCode(_artifact(S150, "handler/CompatibilityFallbackHandler.sol", "CompatibilityFallbackHandler"));
         ZKNOX_SafePQLens lens = new ZKNOX_SafePQLens(singleton, singletonL2, handler);
+        pqFactory = address(factory);
+        safeSingleton = singleton;
+        safeProxyFactory = address(proxies);
+        fallbackHandler = handler;
 
         // ---- the owners
         address[] memory eoas = new address[](3);
@@ -199,6 +209,10 @@ contract DeployLocalNested is Script {
         vm.serializeAddress(j, "lens", lens);
         vm.serializeAddress(j, "pqImplementation", pqImplementation);
         vm.serializeAddress(j, "pqOwners", clones);
+        vm.serializeAddress(j, "pqFactory", pqFactory);
+        vm.serializeAddress(j, "safeSingleton", safeSingleton);
+        vm.serializeAddress(j, "safeProxyFactory", safeProxyFactory);
+        vm.serializeAddress(j, "fallbackHandler", fallbackHandler);
         string memory out = vm.serializeAddress(j, "root", root);
         string memory path = string.concat("deployments/", vm.toString(block.chainid), "-nested.json");
         vm.writeJson(out, path);

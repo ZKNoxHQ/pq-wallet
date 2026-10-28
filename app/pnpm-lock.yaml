@@ -218,6 +218,25 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@26.4.1)(jsdom@26.1.0)
 
+  packages/provider:
+    dependencies:
+      '@zknox/pq-safe':
+        specifier: workspace:*
+        version: link:../safe
+      viem:
+        specifier: ^2.30.0
+        version: 2.56.3(typescript@5.9.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^26.4.1
+        version: 26.4.1
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@26.4.1)(jsdom@26.1.0)
+
   packages/safe:
     dependencies:
       '@noble/hashes':

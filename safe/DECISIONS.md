@@ -463,3 +463,127 @@ deux familles, `m/44'/60'/0'/0/i` d'abord puisque c'est le cas courant, puis
 - Un prochain arrangement se crée avec `m/44'/60'/0'/0/i`. Les défauts de
   `ecml.mjs` gardent la forme durcie, pour qu'une commande sans `--path`
   continue de correspondre aux clones existants.
+
+## ADR-015 — Fork de Safe{Wallet} : le clone devient le wallet connecté (renverse ADR-012)
+
+**Contexte**
+
+ADR-012 écartait le fork : forker l'UI ne déplace pas le plafond de 5 000 octets du Transaction Service, et
+le chemin `approveHash` affichait déjà « 2 of 2 » sans rien forker. Deux faits sont venus depuis.
+
+- ADR-013 : WebHID n'est pas accordé à l'iframe d'une Safe App. Dans Safe{Wallet}, `safe-signer` ne peut
+  donc pas faire signer l'appareil ; le détenteur doit rouvrir la page dans un onglet à part, avec son lien.
+- La démonstration Sepolia du 2026-10-27 a montré le parcours entier, et ce qu'il demande : quitter la file
+  de Safe{Wallet} pour signer, rassembler les réponses de chacun, envoyer une transaction de 84 Ko.
+
+Demande du 2026-10-27 : créer les comptes post-quantiques et demander les signatures dans Safe lui-même.
+
+Relecture de `safe-global/safe-wallet-monorepo` à `23b47f4` (2026-10-27) : Safe{Wallet} sait déjà faire
+signer un owner **contrat**, sans signature hors chaîne.
+
+- `components/tx/shared/hooks.ts:148` : si le wallet connecté a du code, `signTx` passe par
+  `dispatchOnChainSigning`, qui demande au wallet `eth_sendTransaction {to: safe, data: approveHash(h)}`.
+- `utils/nested-safe-wallet.ts:95` : même chose pour un owner d'un Safe imbriqué (root ← `S_pq` ← clone) :
+  proposition non signée de la transaction de `S_pq`, puis `approveTransactionHash`.
+- `dispatchTxExecution` fait de même pour l'exécution, et Safe compte l'exécutant owner comme sa propre
+  approbation.
+- Le Transaction Service indexe `ApproveHash` en confirmation de 65 octets avec `owner = msg.sender`
+  (`history/indexers/tx_processor.py:760`), et la première confirmation rend « trusted » une proposition
+  non signée (`history/signals.py:85`).
+
+**Décision**
+
+Fork d'`apps/web` seul, branché sur le Client Gateway et le Transaction Service publics :
+`ZKNoxHQ/safe-wallet-monorepo`, branche `zknox/pq`.
+
+- Le compte post-quantique devient un **wallet web3-onboard** dont le compte est le clone.
+  `@zknox/pq-provider` (`app/packages/provider`) en est le provider EIP-1193 : il transforme ce
+  `eth_sendTransaction` en `clone.executeWithHybridSig([{to, value, data}], deadline, sig)`, signé sur
+  l'ECML-Signer et payé par un wallet de navigateur que le détenteur choisit (EIP-6963). Le clone est
+  `msg.sender` de l'appel intérieur. **Aucun contrat ne change.**
+- Chaque détenteur confirme **seul**, on-chain, comme n'importe quel owner contrat. Plus de collecte, plus
+  de coordinateur, rien de plus de 65 octets ne passe par l'API.
+- Le condensat `hashExecute` est recalculé localement et confirmé contre celui du clone avant que
+  l'appareil ne soit sollicité, pour la raison d'ADR-011.
+- Les méthodes de signature hors chaîne répondent 4200 : une signature 1271 de 41,8 Ko ne tient dans
+  aucun canal hors chaîne.
+- Création : le compte post-quantique se crée dans le dialogue de connexion (`createAccount`, payé par le
+  même wallet) ; l'arrangement NESTED par `/new-safe/pq`, dont `planArrangement`
+  (`app/packages/safe/src/arrangement.ts`) reprend les sels de `CreateArrangement.s.sol` : mêmes owners,
+  mêmes trois adresses, chacun peut finir ce que l'autre a commencé.
+- Le code post-quantique est **copié octet pour octet** dans `packages/pq` du fork par
+  `packages/pq/scripts/sync.mjs`, qui écrit le commit source dans `src/PIN` et dont `--check` échoue sur
+  toute différence. Les tests restent ici, contre la Solidity et sur une chaîne ; une copie ne vaut ces
+  tests que si elle porte les mêmes octets.
+
+**Conséquences**
+
+- Mesuré sur anvil (`app/packages/provider/test/provider.anvil.test.ts`) : une confirmation 1,87 M gas pour
+  42 212 octets de calldata ; le second détenteur confirme et exécute en une transaction, 1,87 à 1,93 M.
+  Le côté `S_pq` d'une transaction du root coûte ~3,8 M pour k = 2, contre 3,94 M groupé (ADR-010).
+- **Le plafond k ≤ 3 d'ADR-008 tombe** : chaque transaction fait ~42 Ko, quel que soit k.
+- Chaque détenteur a besoin d'un wallet payeur financé. La moitié k1 de l'appareil ne sert pas de payeur :
+  elle ne signe une transaction Ethereum qu'en aveugle par `0x16`, au prix d'une ML-DSA calculée pour rien.
+- L'appareil signe un condensat (signature aveugle) ; le dialogue l'affiche en huit groupes à comparer.
+- Une transaction **proposée** par un détenteur post-quantique arrive non signée, donc non « trusted », et
+  le devient à sa première confirmation on-chain.
+- WebHID : Chromium seulement. `safe-signer` reste, pour Firefox, pour un appareil branché sur une autre
+  machine, et pour le chemin groupé d'ADR-010.
+- Empreinte sur le code amont : onze fichiers touchés, une quarantaine de lignes (enregistrement du
+  wallet, montage du dialogue, deux points d'entrée, une route, les alias, et l'avertissement de solde que
+  Safe{Wallet} affichait pour le clone alors que c'est le payeur qui paie), plus `yarn.lock`. Le reste est
+  neuf, dans `apps/web/src/features/pq` et `packages/pq`, ce qui garde le rebase sur l'amont mécanique.
+- Ouvert au 2026-10-27 : l'accès du fork, servi sur un autre origin, au Client Gateway public. `curl`
+  reçoit 403 avec ou sans origin, ce qui désigne un filtrage de l'user-agent et non une politique CORS ;
+  le test décisif est un `fetch` depuis un navigateur. S'il échoue, un relais devant le gateway suffit, le
+  reste ne change pas.
+
+## ADR-016 — Vérifier un déploiement : octets, liens, métadonnées
+
+**Contexte**
+
+Au 2026-10-28, rien n'avait comparé les contrats ML-DSA déployés sur Sepolia et Hoodi à leurs sources. La
+démonstration prouvait qu'ils acceptent des signatures valides, pas qu'ils exécutent le code de ce dépôt,
+et aucune vérification n'était publiée sur un explorateur.
+
+Deux faits relevés en préparant la vérification :
+
+- les métadonnées de **tous** les contrats compilés dans `safe/` portent deux remappings absolus,
+  `erc4626-tests/` et `halmos-cheatcodes/`, que Foundry détecte dans les sous-modules d'OpenZeppelin. Le
+  bytecode n'en dépend pas, le hash IPFS des métadonnées (trailer CBOR) si ;
+- l'implémentation est créée par le constructeur du factory : elle est compilée dans l'unité du factory, où
+  son fichier porte un autre nom (`../contracts/src/…`) que dans son propre artefact (chemin absolu, via
+  le remapping `pq-account/`). Son trailer diffère donc de celui de son artefact, sur la même machine.
+
+**Décision**
+
+`safe/scripts/verify-deployment.mjs`, Node seul (Keccak-256 compris), sur un `forge build --ast` :
+
+- par contrat : runtime on-chain, immutables masqués, contre l'artefact (`code`) ; chaque immutable relu et
+  comparé à l'adresse attendue (liens) ; le CID des métadonnées recalculé et comparé au trailer (`exact`) ;
+- l'implémentation est découpée dans le code de création du factory, et ses métadonnées renommées par
+  keccak256 des sources de l'unité du factory ;
+- `--origin-root` réécrit le chemin du dépôt de la machine de compilation dans les métadonnées avant
+  hachage : `exact` devient atteignable depuis n'importe quel répertoire ;
+- le helper Keccak est comparé octet pour octet au fichier, et à `F1600_CODEHASH` ;
+- les contrats Safe canoniques par code hash (`@safe-global/safe-deployments` 1.37.65), les proxies par
+  le runtime que produit `proxyCreationCode` du factory canonique, puis l'arrangement en descendant du root ;
+- toutes les lectures épinglées à un bloc.
+
+`make safe-verify-deployed` construit le commit qui a enregistré les déploiements (`bbe9be8`) dans un
+worktree `.verify/` et lance la vérification.
+
+**Conséquences**
+
+- Le commit compte : le lens importe `ISafeView.sol`, modifié en `604af99`. Son bytecode est identique à
+  `main`, ses métadonnées non.
+- Testé sur anvil, au-dessus du runtime Safe 1.5.0 publié sur npm (`@safe-global/safe-smart-account`
+  1.5.0, hachages égaux à ceux de safe-deployments) : `exact` partout ; `code` pour les cinq contrats compilés
+  depuis un autre répertoire, `exact` avec `--origin-root` ; `MISMATCH` sur un octet modifié du helper ou du
+  vérifieur ; `FAIL` sur un immutable réécrit ou un guard posé.
+- Le helper `f1600_170.hex` est celui de fireblocks-labs/evm-ml-dsa-verifier à `cca262b`, reconstruit par
+  leur `tools/build_f1600_batch.py --check` depuis `f1600_core.hex` ; le cœur lui-même n'a pas de chemin
+  de reconstruction (générateur perdu, selon leur README).
+- À trancher pour le prochain déploiement : `auto_detect_remappings = false` dans `safe/foundry.toml`
+  (tous les remappings nécessaires dans `remappings.txt`), et le commit source écrit dans chaque
+  `deployments/*.json`. Les deux rendent `exact` atteignable sans `--origin-root` ni recherche du commit.

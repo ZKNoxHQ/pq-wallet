@@ -108,6 +108,19 @@ safe-exec-planned:
 safe-exec-nested:
 	cd safe && forge script script/ExecNestedTx.s.sol --rpc-url $(RPC) --ledger --sender $(SENDER) --broadcast
 
+# ---- does what is live match this repository? Builds the commit that recorded the deployments in a worktree
+# under .verify/, then compares every byte on the chain behind RPC with that build (safe/scripts/verify-deployment.mjs,
+# Node only). ORIGIN_ROOT = the repository's absolute path on the machine that compiled the deployment: the
+# metadata records two absolute remappings, and without it the result is `code` instead of `exact`.
+DEPLOYED_COMMIT ?= bbe9be8
+safe-verify-deployed:
+	@test -d .verify/$(DEPLOYED_COMMIT) || (git worktree add --detach .verify/$(DEPLOYED_COMMIT) $(DEPLOYED_COMMIT) \
+	  && cd .verify/$(DEPLOYED_COMMIT) && git submodule update --init --recursive)
+	cd .verify/$(DEPLOYED_COMMIT)/safe && forge build --ast
+	node safe/scripts/verify-deployment.mjs --rpc $(RPC) --build $(abspath .verify/$(DEPLOYED_COMMIT)/safe) \
+	  --deployments $(abspath safe/deployments) $(if $(ROOT),--root $(ROOT)) $(if $(ORIGIN_ROOT),--origin-root $(ORIGIN_ROOT)) \
+	  --report $(abspath .verify)/report-$(DEPLOYED_COMMIT).json
+
 .PHONY: install test build test-contracts test-safe test-app dev safe-signer abi anvil \
         safe-front-fixture safe-deploy-local safe-deploy-pq65 safe-create-owner safe-create-root \
-        safe-create-arrangement
+        safe-create-arrangement safe-verify-deployed

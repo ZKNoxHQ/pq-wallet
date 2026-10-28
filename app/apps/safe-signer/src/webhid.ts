@@ -58,7 +58,22 @@ export async function openLedger(): Promise<LedgerLink> {
         `Ledger Live holds the USB interface for itself.`,
     );
   });
+  return linkOf(transport);
+}
 
+/** The device this origin was already granted, without a click, or null if there is none to reopen.
+ *  A wallet asked to sign long after it was connected — a transaction confirmed an hour later, a page
+ *  reloaded since — has no user gesture to spend on `requestDevice`; this is what it calls first. */
+export async function reopenLedger(): Promise<LedgerLink | null> {
+  if (webHidObstacle()) return null;
+  const TransportWebHID = await transportModule();
+  const transport = await TransportWebHID.openConnected().catch(() => null);
+  return transport ? linkOf(transport) : null;
+}
+
+type HidTransport = Awaited<ReturnType<Awaited<ReturnType<typeof transportModule>>["request"]>>;
+
+function linkOf(transport: HidTransport): LedgerLink {
   const send: Apdu = async (ins, p1, p2, data = new Uint8Array(0)) => {
     // The transport returns the payload with the two status bytes appended, whatever the status.
     const res = await transport.send(CLA, ins, p1, p2, Buffer.from(data), STATUS_WORDS);

@@ -3,6 +3,54 @@
 Ce fichier suit la disposition du dépôt et les pins. Le détail par périmètre reste dans
 `contracts/VERSION.md` et `safe/VERSION.md`, et les décisions dans les `DECISIONS.md` correspondants.
 
+## [0.11.0] 2026-10-28 : vérifier ce qui est déployé
+
+### Added
+- `safe/scripts/verify-deployment.mjs` : compare ce qui est en ligne à ce que le dépôt compile, sans rien à
+  installer (Node 22, Keccak-256 embarqué). Par contrat : bytecode à immutables masqués, immutables relus
+  contre les adresses attendues, hash des métadonnées recalculé contre le trailer CBOR. Puis les contrats Safe
+  canoniques par code hash, les proxies, et l'arrangement du root jusqu'aux clones post-quantiques, dont les
+  deux hachages de clés sont imprimés pour que chaque détenteur les compare à son appareil. Rapport JSON,
+  code de sortie non nul en cas d'écart. Voir `safe/DECISIONS.md` ADR-016.
+- `make safe-verify-deployed RPC=… ORIGIN_ROOT=…` : worktree au commit qui a enregistré les déploiements
+  (`bbe9be8`, `DEPLOYED_COMMIT` pour un autre), build avec AST, vérification. `.verify/` ignoré.
+
+### Vérifié, et ce qui ne l'est pas
+Testé de bout en bout sur anvil (pile par `DeployPqStack65`, arrangement par `CreateArrangement`, runtime Safe
+1.5.0 publié) et contre des altérations volontaires. Sepolia et Hoodi restent à passer : il faut un RPC public.
+
+## [0.10.0] 2026-10-27 : le compte post-quantique devient un wallet
+
+### Added
+- `app/packages/provider` (`@zknox/pq-provider`) : un provider EIP-1193 dont le compte est un clone
+  `ZKNOX_PQAccount7702`. `eth_sendTransaction` devient `clone.executeWithHybridSig(...)`, signé par le
+  détenteur (ECML-Signer ou porteur logiciel) et payé par un wallet distinct ; le condensat `hashExecute` est
+  recalculé et confirmé contre le clone, la réponse vérifiée (clés, moitié k1) avant que le payeur ne soit
+  sollicité, et l'estimation fait tourner le vérifieur ML-DSA, donc une signature fausse ne coûte rien.
+  Signatures hors chaîne refusées (4200). Aussi : l'adresse du clone recalculée (CREATE2 ERC-1167),
+  `createAccountData`, un transport JSON-RPC, un payeur EIP-1193 et la découverte EIP-6963.
+  7 tests sur anvil, dont le parcours que Safe{Wallet} fait faire à un owner contrat.
+- `app/packages/safe/src/arrangement.ts` : `planArrangement`, les trois Safes de l'arrangement NESTED, leurs
+  adresses et leurs transactions de création, avec les sels de `CreateArrangement.s.sol`. 3 tests, dont la
+  création réelle sur anvil et le lens qui l'accepte.
+- `app/apps/safe-signer/src/webhid.ts` : `reopenLedger`, l'appareil déjà autorisé rouvert sans geste — un
+  wallet sollicité longtemps après sa connexion n'a plus de clic à dépenser sur `requestDevice`.
+- `safe/script/DeployLocalNested.s.sol` écrit aussi le factory post-quantique et la pile Safe locale, dont
+  un front a besoin pour créer d'autres clones et d'autres Safes sur anvil.
+
+### Decided
+Fork de Safe{Wallet}, qui renverse ADR-012 : le clone devient le wallet connecté, et Safe{Wallet} prend le
+chemin qu'il a déjà pour un owner contrat. Chaque détenteur confirme seul et on-chain, ce qui fait tomber le
+plafond k ≤ 3. Voir `safe/DECISIONS.md` ADR-015.
+
+### Measured
+Sur anvil : une confirmation post-quantique 1,87 M gas, 42 212 octets ; le second détenteur confirme et
+exécute en une transaction, 1,87 à 1,93 M. Le côté `S_pq` d'une transaction du root revient à ~3,8 M pour
+k = 2, contre 3,94 M par le chemin groupé.
+
+### Tests
+app : core 3, ui 2, safe 61 (+3), provider 7, safe-signer 4.
+
 ## [0.9.0] 2026-10-27 : l'appareil parle à la page
 
 ### Added

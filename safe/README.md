@@ -147,6 +147,14 @@ Transaction Service caps a confirmation signature at 5,000 bytes, and the
 Client Gateway behind app.safe.global mis-parses a signature blob holding more
 than one contract signature. Both are read from the code, not from an incident.
 
+## Checking a deployment
+
+`make safe-verify-deployed RPC=… ORIGIN_ROOT=…` (from the root of the repository) compares what is live with
+what this repository compiles: every contract ZKNOX deployed, byte for byte, the addresses each one holds, the
+canonical Safe contracts by code hash, and the arrangement from the root Safe down to the post-quantum clones.
+`ORIGIN_ROOT` is the repository's path on the machine that compiled the deployment; DECISIONS.md ADR-016 says
+why it is needed and what the check does not cover.
+
 ## A demonstration on Sepolia
 
 [`SEPOLIA.md`](SEPOLIA.md) walks the whole path: installing the Ledger app, reading its keys, deploying the

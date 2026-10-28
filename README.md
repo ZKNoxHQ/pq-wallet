@@ -7,8 +7,9 @@ it, and post-quantum signers inside a Safe multisig. One signature scheme, three
 ```
 contracts/   the hybrid account, its EIP-7702 satellite, the factory, the Falcon adapter
 safe/        post-quantum owners of a Safe 1.5.0: policy lens, migration plan, digests, scripts
-app/         the fronts: TypeScript cores without React, React UI without viem, the wallet demo
-             and safe-signer, which collects post-quantum owner signatures for a Safe
+app/         the fronts: TypeScript cores without React, React UI without viem, the wallet demo,
+             safe-signer, which collects post-quantum owner signatures for a Safe, and the
+             EIP-1193 provider the Safe{Wallet} fork connects as a post-quantum wallet
 lib/         pinned dependencies, as git submodules
 ```
 
@@ -90,3 +91,8 @@ make anvil              # terminal 1
 make safe-deploy-local  # terminal 2: Safe singletons, the PQ stack, the three Safes; prints the .env
 make safe-signer        # http://localhost:5174
 ```
+
+Inside Safe{Wallet} itself, the post-quantum account is a wallet: the fork `ZKNoxHQ/safe-wallet-monorepo`
+(branch `zknox/pq`) connects the holder's clone through `app/packages/provider`, and Safe{Wallet} asks it for
+on-chain approvals as it does any contract owner. Each holder confirms alone, so `k` is no longer capped by
+the size of one transaction. `safe/DECISIONS.md` ADR-015 has the reasoning, the fork's `ZKNOX.md` the setup.
